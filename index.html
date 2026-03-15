@@ -84,9 +84,12 @@
         }
         .btn:hover { background-color: #ffffff; box-shadow: 0 0 20px #ffffff; }
         
+        /* Upravené Drag & Drop (Nyní Tap & Place) */
         .word-bank { min-height: 40px; border: 1px dashed #00ffff; padding: 10px; margin-bottom: 20px; background: rgba(0,0,0,0.5); }
-        .draggable { display: inline-block; background-color: #00ffff; color: #000; padding: 2px 8px; margin: 0; cursor: grab; border-radius: 3px; font-weight: bold; font-size: 0.9em; white-space: nowrap; }
-        .dropzone { display: inline-flex; min-width: 120px; min-height: 24px; border: 1px dashed #00ffff; vertical-align: middle; background-color: #000; color: #00ffff; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-sizing: border-box; }
+        .draggable { display: inline-block; background-color: #00ffff; color: #000; padding: 2px 8px; margin: 4px; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 0.9em; white-space: nowrap; transition: box-shadow 0.2s; }
+        .draggable.selected { box-shadow: 0 0 15px #ff0044, 0 0 5px #ff0044 inset; background-color: #ffffff; }
+        .dropzone { display: inline-flex; min-width: 120px; min-height: 26px; border: 1px dashed #00ffff; vertical-align: middle; background-color: #000; color: #00ffff; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-sizing: border-box; }
+        .dropzone:hover { background-color: #111; }
         
         .compass-grid { display: grid; grid-template-columns: 80px 80px 80px; gap: 10px; justify-content: center; margin: 20px 0; align-items: center; justify-items: center; }
         .wire-center { width: 40px; height: 40px; border-radius: 50%; background-color: #00ffff; display: flex; justify-content: center; align-items: center; color: #000; font-weight: bold; box-shadow: 0 0 15px #00ffff; }
@@ -134,7 +137,7 @@
         <button class="btn" onclick="location.reload()" style="font-size: 2em; margin-top: 30px;">Zkusit znovu</button>
     </div>
 
-    <h1 id="main-title" style="display:none;">CERN OPERAČNÍ SYSTÉM v4.6</h1>
+    <h1 id="main-title" style="display:none;">CERN OPERAČNÍ SYSTÉM v4.7</h1>
 
     <div class="layout" id="game-layout">
         <div class="map-panel">
@@ -249,16 +252,16 @@
 
             <div id="seg2" class="module">
                 <h2>Modul 2: Lab Log Recovery</h2>
-                <p>Přetáhněte slova do mezer. Kliknutím na slovo v textu ho vrátíte zpět do banku.</p>
+                <p><strong>1. Ťukni na slovo v nabídce</strong> (zvýrazní se červeně) a <strong>2. ťukni do prázdného políčka v textu</strong>. Pokud se spleteš, ťukni na slovo v políčku pro vrácení do nabídky.</p>
                 <div class="word-bank" id="word-bank">
-                    <div class="draggable" draggable="true" id="w1">homogeneous</div>
-                    <div class="draggable" draggable="true" id="w2">velocity</div>
-                    <div class="draggable" draggable="true" id="w3">circular</div>
-                    <div class="draggable" draggable="true" id="w4">perpendicular</div>
-                    <div class="draggable" draggable="true" id="w5">no force</div>
+                    <div class="draggable" id="w1">homogeneous</div>
+                    <div class="draggable" id="w2">velocity</div>
+                    <div class="draggable" id="w3">circular</div>
+                    <div class="draggable" id="w4">perpendicular</div>
+                    <div class="draggable" id="w5">no force</div>
                 </div>
                 <p style="line-height: 2.2; font-size: 1.1em;">
-                    When a charged particle enters a <span class="dropzone" id="drop1" data-answer="w1" onclick="returnWord(this)"></span> magnetic field, its trajectory depends on the angle of entry. If the particle's <span class="dropzone" id="drop2" data-answer="w2" onclick="returnWord(this)"></span> is parallel to the magnetic induction lines, there is <span class="dropzone" id="drop3" data-answer="w5" onclick="returnWord(this)"></span> acting on it. However, if the particle enters <span class="dropzone" id="drop4" data-answer="w4" onclick="returnWord(this)"></span> to the field lines, the magnetic force causes the particle to move in a <span class="dropzone" id="drop5" data-answer="w3" onclick="returnWord(this)"></span> path.
+                    When a charged particle enters a <span class="dropzone" id="drop1" data-answer="w1" onclick="handleZoneClick(this)"></span> magnetic field, its trajectory depends on the angle of entry. If the particle's <span class="dropzone" id="drop2" data-answer="w2" onclick="handleZoneClick(this)"></span> is parallel to the magnetic induction lines, there is <span class="dropzone" id="drop3" data-answer="w5" onclick="handleZoneClick(this)"></span> acting on it. However, if the particle enters <span class="dropzone" id="drop4" data-answer="w4" onclick="handleZoneClick(this)"></span> to the field lines, the magnetic force causes the particle to move in a <span class="dropzone" id="drop5" data-answer="w3" onclick="handleZoneClick(this)"></span> path.
                 </p>
                 <button class="btn" onclick="checkDND()">Opravit modul</button>
             </div>
@@ -434,7 +437,6 @@
         const gameLayout = document.getElementById('game-layout');
         const mainTitle = document.getElementById('main-title');
 
-        // Funkce pro přechod do hry
         function startGame() {
             introOverlay.style.display = 'none';
             gameLayout.style.display = 'flex';
@@ -450,25 +452,21 @@
             introVideo.style.display = 'block';
             skipBtn.style.display = 'block';
 
-            // Zajištění přehrávání od začátku
             introVideo.currentTime = 0;
-            
             let playPromise = introVideo.play();
             
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
-                    console.log("Prohlížeč zablokoval automatické přehrání, použijte nativní controls nebo video přeskočte:", error);
+                    console.log("Prohlížeč zablokoval automatické přehrání:", error);
                 });
             }
         };
 
-        // Ruční přeskočení videa
         skipBtn.onclick = () => {
             introVideo.pause();
             startGame();
         };
 
-        // Konec videa automaticky spustí hru
         introVideo.onended = startGame;
 
         // Logika hry
@@ -551,21 +549,39 @@
             else triggerDanger();
         }
 
-        // Drag & Drop
-        let draggedElement = null;
+        // ZMĚNA PRO DOTYKOVÁ ZAŘÍZENÍ: Tap & Place
+        let selectedWord = null;
+
+        // Kliknutí na slovo v nabídce
         document.querySelectorAll('.draggable').forEach(elem => {
-            elem.addEventListener('dragstart', function() { draggedElement = this; setTimeout(() => this.style.opacity = '0.5', 0); });
-            elem.addEventListener('dragend', function() { setTimeout(() => this.style.opacity = '1', 0); draggedElement = null; });
-        });
-        document.querySelectorAll('.dropzone').forEach(zone => {
-            zone.addEventListener('dragover', e => e.preventDefault());
-            zone.addEventListener('drop', function() {
-                if(draggedElement && this.children.length === 0) this.appendChild(draggedElement);
+            elem.addEventListener('click', function() {
+                if (selectedWord) {
+                    selectedWord.classList.remove('selected');
+                }
+                selectedWord = this;
+                this.classList.add('selected');
             });
         });
-        function returnWord(zone) {
-            if(zone.children.length > 0) document.getElementById('word-bank').appendChild(zone.children[0]);
+
+        // Kliknutí na prázdné pole v textu nebo pro vrácení
+        function handleZoneClick(zone) {
+            // Pokud je zóna prázdná a máme vybrané slovo -> vložit
+            if (zone.children.length === 0 && selectedWord) {
+                zone.appendChild(selectedWord);
+                selectedWord.classList.remove('selected');
+                selectedWord = null;
+            } 
+            // Pokud zóna už obsahuje slovo -> vrátit zpět do banky
+            else if (zone.children.length > 0) {
+                let wordToReturn = zone.children[0];
+                document.getElementById('word-bank').appendChild(wordToReturn);
+                if (selectedWord === wordToReturn) {
+                    selectedWord.classList.remove('selected');
+                    selectedWord = null;
+                }
+            }
         }
+
         function checkDND() {
             let correct = true;
             document.querySelectorAll('.dropzone').forEach(zone => {
