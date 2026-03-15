@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CERN Projekt Restart: Operace Gravitino</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+        body {
+            background-color: #050a12; color: #00ffff;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px; margin: 0; display: flex; flex-direction: column; align-items: center;
+        }
+        h1, h2 { border-bottom: 1px solid #00ffff; padding-bottom: 10px; text-shadow: 0 0 10px #00ffff; margin-top: 0; }
+        
+        /* Intro Video Overlay */
+        #overlay-intro {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #000; z-index: 10000; display: flex;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        #intro-video { 
+            width: 100%; max-width: 1200px; height: 80vh; 
+            object-fit: contain; display: none; background-color: #000;
+        }
+        
+        .layout {
+            display: none; 
+            flex-wrap: wrap; justify-content: center; gap: 40px; width: 100%; max-width: 1100px;
+        }
+        
+        .map-panel {
+            flex: 1; min-width: 350px; display: flex; flex-direction: column; align-items: center;
+        }
+        
+        .question-panel {
+            flex: 1.5; min-width: 400px; background-color: rgba(0, 30, 50, 0.8);
+            border: 1px solid #00ffff; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+            padding: 20px; position: relative;
+        }
+
+        .map-container { position: relative; width: 400px; height: 400px; }
+        svg { width: 100%; height: 100%; }
+        
+        .ring { fill: none; stroke: #004466; stroke-width: 25; filter: url(#glow-blue); }
+        .ring-inner { fill: none; stroke: #00ffff; stroke-width: 2; stroke-dasharray: 5,5; filter: url(#glow-cyan); }
+        .node { stroke: #000; stroke-width: 3; cursor: pointer; transition: 0.3s; }
+        .node:hover { stroke: #fff; }
+        .broken { fill: #ff0044; filter: url(#glow-red); animation: pulse-danger 1s infinite alternate; }
+        .fixed { fill: #39ff14; filter: url(#glow-green); }
+        
+        .connection { fill: none; stroke: #111; stroke-width: 6; transition: stroke 0.5s, filter 0.5s; }
+        .connection.neon { stroke: #39ff14; filter: url(#glow-green); }
+
+        .spin { animation: spinRing 4s linear infinite; transform-origin: 200px 200px; }
+        @keyframes spinRing { 100% { transform: rotate(360deg); } }
+
+        @keyframes pulse-danger {
+            from { r: 12; opacity: 1; }
+            to { r: 15; opacity: 0.8; }
+        }
+
+        .danger-panel {
+            border: 1px solid #ff0044; padding: 15px; width: 100%; box-sizing: border-box;
+            background-color: rgba(255, 0, 68, 0.1); box-shadow: 0 0 15px rgba(255, 0, 68, 0.3);
+            text-align: center; margin-bottom: 20px;
+        }
+        .led {
+            display: inline-block; width: 20px; height: 20px; border-radius: 50%;
+            background-color: #330000; margin: 0 5px; border: 1px solid #000; transition: 0.3s;
+        }
+        .led.on { background-color: #ff0044; box-shadow: 0 0 15px #ff0044; }
+
+        .module { display: none; }
+        .module.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .btn {
+            background-color: #00ffff; color: #000; border: none; padding: 10px 20px;
+            font-size: 16px; cursor: pointer; font-weight: bold; margin-top: 15px;
+            box-shadow: 0 0 10px #00ffff; transition: 0.2s;
+        }
+        .btn:hover { background-color: #ffffff; box-shadow: 0 0 20px #ffffff; }
+        
+        .word-bank { min-height: 40px; border: 1px dashed #00ffff; padding: 10px; margin-bottom: 20px; background: rgba(0,0,0,0.5); }
+        .draggable { display: inline-block; background-color: #00ffff; color: #000; padding: 2px 8px; margin: 0; cursor: grab; border-radius: 3px; font-weight: bold; font-size: 0.9em; white-space: nowrap; }
+        .dropzone { display: inline-flex; min-width: 120px; min-height: 24px; border: 1px dashed #00ffff; vertical-align: middle; background-color: #000; color: #00ffff; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-sizing: border-box; }
+        
+        .compass-grid { display: grid; grid-template-columns: 80px 80px 80px; gap: 10px; justify-content: center; margin: 20px 0; align-items: center; justify-items: center; }
+        .wire-center { width: 40px; height: 40px; border-radius: 50%; background-color: #00ffff; display: flex; justify-content: center; align-items: center; color: #000; font-weight: bold; box-shadow: 0 0 15px #00ffff; }
+        .compass { width: 60px; height: 60px; border: 2px solid #555; border-radius: 50%; position: relative; cursor: pointer; background: #000; }
+        .needle { width: 4px; height: 50px; background: linear-gradient(to bottom, #ff0044 50%, white 50%); position: absolute; top: 5px; left: 28px; transition: transform 0.2s; }
+        
+        .question-block { line-height: 2; font-size: 1.1em; }
+        .question-block label { cursor: pointer; margin-left: 10px; }
+        .maze-select { margin-top: 10px; background: #000; color: #00ffff; border: 1px solid #00ffff; padding: 5px; }
+
+        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: none; justify-content: center; align-items: center; flex-direction: column; z-index: 9999; text-align: center; }
+        .overlay-success { background-color: rgba(0, 50, 0, 0.9); color: #39ff14; text-shadow: 0 0 20px #39ff14; }
+        .overlay-success h1 { font-size: 4em; border: none; margin-bottom: 0; }
+        .overlay-danger { background-color: rgba(50, 0, 0, 0.95); color: #ff0044; text-shadow: 0 0 20px #ff0044; }
+        .overlay-danger h1 { font-size: 5em; border: none; margin-bottom: 0; animation: shake 0.5s infinite; }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            10%, 30%, 50%, 70%, 90% { transform: translate(-5px, -5px); }
+            20%, 40%, 60%, 80% { transform: translate(5px, 5px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay-intro">
+        <button id="start-btn" class="btn" style="font-size: 2em; padding: 20px 40px; margin-bottom: 20px; box-shadow: 0 0 20px #00ffff; z-index: 10001;">Zahájit misi záchrana CERNu</button>
+        <video id="intro-video" src="cern_intro.mp4" playsinline preload="auto" controls style="z-index: 10000;"></video>
+        <button id="skip-btn" class="btn" style="display: none; position: absolute; bottom: 30px; right: 30px; z-index: 10002; background-color: #555; color: #fff; box-shadow: none;">Přeskočit video &raquo;</button>
+    </div>
+
+    <div id="overlay-success" class="overlay overlay-success">
+        <h1>VÝBORNĚ!</h1>
+        <h2 id="success-text">Modul úspěšně opraven a rekalibrován.</h2>
+    </div>
+
+    <div id="overlay-danger" class="overlay overlay-danger">
+        <h1>⚠ CHYBA ⚠</h1>
+        <h2>Nesprávná data! Systém je destabilizován!</h2>
+    </div>
+
+    <div id="overlay-gameover" class="overlay overlay-danger">
+        <h1>SYSTÉM ZKOLABOVAL</h1>
+        <h2>Přetížení urychlovače. Počet chyb dosáhl kritické meze.</h2>
+        <button class="btn" onclick="location.reload()" style="font-size: 2em; margin-top: 30px;">Zkusit znovu</button>
+    </div>
+
+    <h1 id="main-title" style="display:none;">CERN OPERAČNÍ SYSTÉM v4.6</h1>
+
+    <div class="layout" id="game-layout">
+        <div class="map-panel">
+            <div class="danger-panel">
+                <h3 style="margin-top: 0; border: none; padding: 0;">SYSTÉMOVÁ INTEGRITA</h3>
+                <div id="led-container">
+                    <span class="led" id="led1"></span> <span class="led" id="led2"></span>
+                    <span class="led" id="led3"></span> <span class="led" id="led4"></span>
+                    <span class="led" id="led5"></span>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <svg viewBox="0 0 400 400">
+                    <defs>
+                        <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="6" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                        <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                        <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                        <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" result="blur" /><feComposite in="SourceGraphic" in2="blur" operator="over" /></filter>
+                    </defs>
+
+                    <g id="lhc-ring">
+                        <circle cx="200" cy="200" r="140" class="ring" />
+                        <circle cx="200" cy="200" r="140" class="ring-inner" />
+                        
+                        <path d="M 200 60 A 140 140 0 0 1 290 93" class="connection" id="conn1-2" />
+                        <path d="M 290 93 A 140 140 0 0 1 338 175" class="connection" id="conn2-3" />
+                        <path d="M 338 175 A 140 140 0 0 1 321 270" class="connection" id="conn3-4" />
+                        <path d="M 321 270 A 140 140 0 0 1 248 331" class="connection" id="conn4-5" />
+                        <path d="M 248 331 A 140 140 0 0 1 152 331" class="connection" id="conn5-6" />
+                        <path d="M 152 331 A 140 140 0 0 1 79 270" class="connection" id="conn6-7" />
+                        <path d="M 79 270 A 140 140 0 0 1 62 175" class="connection" id="conn7-8" />
+                        <path d="M 62 175 A 140 140 0 0 1 110 93" class="connection" id="conn8-9" />
+                        <path d="M 110 93 A 140 140 0 0 1 200 60" class="connection" id="conn9-1" />
+
+                        <circle cx="200" cy="60" r="12" class="node broken" id="node1" onclick="openModule(1)" />
+                        <text x="188" y="35" fill="#00ffff" font-weight="bold">M1</text>
+                        
+                        <circle cx="290" cy="93" r="12" class="node broken" id="node2" onclick="openModule(2)" />
+                        <text x="306" y="97" fill="#00ffff" font-weight="bold">M2</text>
+
+                        <circle cx="338" cy="175" r="12" class="node broken" id="node3" onclick="openModule(3)" />
+                        <text x="358" y="180" fill="#00ffff" font-weight="bold">M3</text>
+
+                        <circle cx="321" cy="270" r="12" class="node broken" id="node4" onclick="openModule(4)" />
+                        <text x="340" y="275" fill="#00ffff" font-weight="bold">M4</text>
+
+                        <circle cx="248" cy="331" r="12" class="node broken" id="node5" onclick="openModule(5)" />
+                        <text x="238" y="360" fill="#00ffff" font-weight="bold">M5</text>
+                        
+                        <circle cx="152" cy="331" r="12" class="node broken" id="node6" onclick="openModule(6)" />
+                        <text x="142" y="360" fill="#00ffff" font-weight="bold">M6</text>
+                        
+                        <circle cx="79" cy="270" r="12" class="node broken" id="node7" onclick="openModule(7)" />
+                        <text x="45" y="275" fill="#00ffff" font-weight="bold">M7</text>
+
+                        <circle cx="62" cy="175" r="12" class="node broken" id="node8" onclick="openModule(8)" />
+                        <text x="25" y="180" fill="#00ffff" font-weight="bold">M8</text>
+
+                        <circle cx="110" cy="93" r="12" class="node broken" id="node9" onclick="openModule(9)" />
+                        <text x="80" y="97" fill="#00ffff" font-weight="bold">M9</text>
+                    </g>
+                </svg>
+            </div>
+        </div>
+
+        <div class="question-panel">
+            <div id="welcome-msg">
+                <h2>LHC OFFLINE</h2>
+                <p>Klikněte na libovolný blikající červený modul na mapě a zahajte opravu.</p>
+            </div>
+
+            <div id="seg1" class="module">
+                <h2>Modul 1: Diagnostika částic</h2>
+                <div style="background: #111; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #00ffff;">
+                    <svg viewBox="0 0 350 250" style="width: 100%; height: auto;">
+                        <defs>
+                            <pattern id="crossPattern" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
+                                <line x1="10" y1="10" x2="20" y2="20" stroke="red" stroke-width="2"/>
+                                <line x1="20" y1="10" x2="10" y2="20" stroke="red" stroke-width="2"/>
+                            </pattern>
+                            <marker id="arrow-green" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#39ff14" />
+                            </marker>
+                            <marker id="arrow-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#0066ff" />
+                            </marker>
+                            <marker id="arrow-pink" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff00ff" />
+                            </marker>
+                        </defs>
+                        <rect x="20" y="10" width="300" height="180" fill="url(#crossPattern)" />
+                        <text x="320" y="40" fill="red" font-size="28" font-weight="bold" font-family="Arial">B</text>
+                        <rect x="155" y="190" width="40" height="50" fill="black" stroke="#fff" stroke-width="2"/>
+                        <text x="210" y="230" fill="white" font-size="18" font-family="Arial">Zdroj částic</text>
+                        <path d="M 175 190 Q 175 100 20 60" fill="none" stroke="#39ff14" stroke-width="3" marker-end="url(#arrow-green)"/>
+                        <text x="30" y="45" fill="#39ff14" font-size="28" font-weight="bold" font-family="Arial">&alpha;</text>
+                        <path d="M 175 190 Q 195 150 175 110 T 175 30" fill="none" stroke="#0066ff" stroke-width="3" marker-end="url(#arrow-blue)"/>
+                        <text x="185" y="25" fill="#0066ff" font-size="28" font-weight="bold" font-family="Arial">&gamma;</text>
+                        <path d="M 175 190 Q 175 150 280 120" fill="none" stroke="#ff00ff" stroke-width="3" marker-end="url(#arrow-pink)"/>
+                        <text x="290" y="130" fill="#ff00ff" font-size="28" font-weight="bold" font-family="Arial">&beta;</text>
+                    </svg>
+                </div>
+                <p>Která dráha patří protonu, pokud magnetické pole směřuje ZA monitor (do zdi)?</p>
+                <div class="question-block">
+                    <input type="radio" name="q1" value="alpha" id="q1a"> <label for="q1a">Zelená linie (&alpha;)</label><br>
+                    <input type="radio" name="q1" value="beta" id="q1b"> <label for="q1b">Růžová linie (&beta;)</label><br>
+                    <input type="radio" name="q1" value="gamma" id="q1c"> <label for="q1c">Modrá vlnovka (&gamma;)</label>
+                </div>
+                <button class="btn" onclick="checkRadio(1, 'q1', 'alpha', 'Diagnostika úspěšná!')">Opravit modul</button>
+            </div>
+
+            <div id="seg2" class="module">
+                <h2>Modul 2: Lab Log Recovery</h2>
+                <p>Přetáhněte slova do mezer. Kliknutím na slovo v textu ho vrátíte zpět do banku.</p>
+                <div class="word-bank" id="word-bank">
+                    <div class="draggable" draggable="true" id="w1">homogeneous</div>
+                    <div class="draggable" draggable="true" id="w2">velocity</div>
+                    <div class="draggable" draggable="true" id="w3">circular</div>
+                    <div class="draggable" draggable="true" id="w4">perpendicular</div>
+                    <div class="draggable" draggable="true" id="w5">no force</div>
+                </div>
+                <p style="line-height: 2.2; font-size: 1.1em;">
+                    When a charged particle enters a <span class="dropzone" id="drop1" data-answer="w1" onclick="returnWord(this)"></span> magnetic field, its trajectory depends on the angle of entry. If the particle's <span class="dropzone" id="drop2" data-answer="w2" onclick="returnWord(this)"></span> is parallel to the magnetic induction lines, there is <span class="dropzone" id="drop3" data-answer="w5" onclick="returnWord(this)"></span> acting on it. However, if the particle enters <span class="dropzone" id="drop4" data-answer="w4" onclick="returnWord(this)"></span> to the field lines, the magnetic force causes the particle to move in a <span class="dropzone" id="drop5" data-answer="w3" onclick="returnWord(this)"></span> path.
+                </p>
+                <button class="btn" onclick="checkDND()">Opravit modul</button>
+            </div>
+
+            <div id="seg3" class="module">
+                <h2>Modul 3: Výkon fokusace</h2>
+                <p>Navrhněte válcovou cívku o délce \( l = 0{,}5 \text{ m} \). Magnetická indukce ve středu dutiny musí být \( B = 8{,}2 \cdot 10^{-3} \text{ T} \) při proudu \( I = 4{,}3 \text{ A} \).</p>
+                <p style="font-size: 1.3em;">$$ B = \mu_0 \cdot \frac{N \cdot I}{l} $$</p>
+                <p>Kde permeabilita vakua \( \mu_0 = 4\pi \cdot 10^{-7} \text{ T}\cdot\text{m/A} \). Určete počet závitů \( N \).</p>
+                <div class="question-block">
+                    <input type="radio" name="q3" value="A" id="q3a"> <label for="q3a">1517 závitů</label><br>
+                    <input type="radio" name="q3" value="B" id="q3b"> <label for="q3b">380 závitů</label><br>
+                    <input type="radio" name="q3" value="C" id="q3c"> <label for="q3c">759 závitů</label><br>
+                    <input type="radio" name="q3" value="D" id="q3d"> <label for="q3d">2000 závitů</label>
+                </div>
+                <button class="btn" onclick="checkRadio(3, 'q3', 'C', 'Fokusace obnovena!')">Opravit modul</button>
+            </div>
+
+            <div id="seg4" class="module">
+                <h2>Modul 4: Korekce trajektorie</h2>
+                <p>Elektron se pohybuje ve vakuu rychlostí \( v = 3 \cdot 10^3 \text{ km/s} \) kolmo na pole o indukci \( B = 0{,}1 \text{ T} \).</p>
+                <p>Náboj elektronu je \( e = 1{,}6 \cdot 10^{-19} \text{ C} \). Určete velikost magnetické síly působící na elektron.</p>
+                <div class="question-block">
+                    <input type="radio" name="q4" value="A" id="q4a"> <label for="q4a">\( 4{,}8 \cdot 10^{-17} \text{ N} \)</label><br>
+                    <input type="radio" name="q4" value="B" id="q4b"> <label for="q4b">\( 1{,}6 \cdot 10^{-14} \text{ N} \)</label><br>
+                    <input type="radio" name="q4" value="C" id="q4c"> <label for="q4c">\( 4{,}8 \cdot 10^{-14} \text{ N} \)</label><br>
+                    <input type="radio" name="q4" value="D" id="q4d"> <label for="q4d">\( 4{,}8 \cdot 10^{-10} \text{ N} \)</label>
+                </div>
+                <button class="btn" onclick="checkRadio(4, 'q4', 'C', 'Trajektorie stabilizována!')">Opravit modul</button>
+            </div>
+
+            <div id="seg5" class="module">
+                <h2>Modul 5: Hmotnostní spektrograf</h2>
+                <p>Odvozený poloměr dráhy částice ve spektrografu je dán vztahem:</p>
+                <p style="font-size: 1.3em;">$$ r = \frac{m \cdot v}{q \cdot B} $$</p>
+                <p>Co se stane s poloměrem dráhy, pokud do přístroje vletí částice:</p>
+                <div class="question-block">
+                    <p>1. S větší hmotností \( m \)?</p>
+                    <input type="radio" name="s1" value="up" id="s1u"> <label for="s1u">Zvětší se</label>
+                    <input type="radio" name="s1" value="down" id="s1d"> <label for="s1d">Zmenší se</label>
+                    
+                    <p>2. S vyšší rychlostí \( v \)?</p>
+                    <input type="radio" name="s2" value="up" id="s2u"> <label for="s2u">Zvětší se</label>
+                    <input type="radio" name="s2" value="down" id="s2d"> <label for="s2d">Zmenší se</label>
+
+                    <p>3. S větším nábojem \( q \)?</p>
+                    <input type="radio" name="s3" value="up" id="s3u"> <label for="s3u">Zvětší se</label>
+                    <input type="radio" name="s3" value="down" id="s3d"> <label for="s3d">Zmenší se</label>
+                </div>
+                <button class="btn" onclick="checkSpektro()">Opravit modul</button>
+            </div>
+
+            <div id="seg6" class="module">
+                <h2>Modul 6: Magnetické bludiště</h2>
+                <p>Kladně nabitá částice letí detektorem. Pro každé pole určete správný směr magnetických indukčních čar \( \vec{B} \), aby se svazek správně ohnul podle pravidla levé ruky.</p>
+                <div style="background: #e0e0e0; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 10px;">
+                    <svg viewBox="0 0 350 300" style="max-width: 300px; height: auto;">
+                        <circle cx="50" cy="270" r="15" fill="white" stroke="black" stroke-width="2"/>
+                        <text x="42" y="278" font-size="24" font-weight="bold" fill="black">+</text>
+                        <path d="M 50 255 L 50 210" fill="none" stroke="black" stroke-width="3" marker-end="url(#arrow-black)"/>
+                        
+                        <defs>
+                            <marker id="arrow-black" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+                            </marker>
+                        </defs>
+                        <rect x="20" y="50" width="80" height="80" fill="#999" rx="10"/>
+                        <text x="50" y="45" fill="#000" font-weight="bold">Pole 1</text>
+                        <rect x="140" y="50" width="80" height="80" fill="#999" rx="10"/>
+                        <text x="170" y="45" fill="#000" font-weight="bold">Pole 2</text>
+                        <rect x="160" y="180" width="60" height="60" fill="#999" rx="10"/>
+                        <text x="165" y="175" fill="#000" font-weight="bold">Pole 3</text>
+                        <rect x="260" y="180" width="60" height="60" fill="#999" rx="10"/>
+                        <text x="265" y="175" fill="#000" font-weight="bold">Pole 4</text>
+
+                        <path d="M 50 250 L 50 100 Q 50 70 80 70 L 150 70 Q 180 70 180 100 L 180 200 Q 180 220 200 220 L 270 220 Q 290 220 290 200 L 290 100" fill="none" stroke="black" stroke-width="5"/>
+                        <polygon points="45,150 55,150 50,140" fill="black"/>
+                        <polygon points="110,75 110,65 120,70" fill="black"/>
+                        <polygon points="175,150 185,150 180,160" fill="black"/>
+                        <polygon points="230,225 230,215 240,220" fill="black"/>
+                        <polygon points="285,140 295,140 290,130" fill="black"/>
+                    </svg>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div><label>Pole 1: </label> <select id="maze1" class="maze-select"><option value="0">- Vyberte -</option><option value="out">K nám (z monitoru)</option><option value="in">Od nás (do monitoru)</option></select></div>
+                    <div><label>Pole 2: </label> <select id="maze2" class="maze-select"><option value="0">- Vyberte -</option><option value="out">K nám (z monitoru)</option><option value="in">Od nás (do monitoru)</option></select></div>
+                    <div><label>Pole 3: </label> <select id="maze3" class="maze-select"><option value="0">- Vyberte -</option><option value="out">K nám (z monitoru)</option><option value="in">Od nás (do monitoru)</option></select></div>
+                    <div><label>Pole 4: </label> <select id="maze4" class="maze-select"><option value="0">- Vyberte -</option><option value="out">K nám (z monitoru)</option><option value="in">Od nás (do monitoru)</option></select></div>
+                </div>
+                <button class="btn" onclick="checkMaze()">Opravit modul</button>
+            </div>
+
+            <div id="seg7" class="module">
+                <h2>Modul 7: Magnetický kód</h2>
+                <p>Před vámi je přímý vodič, kterým protéká proud směrem K VÁM (ven z obrazovky). Kliknutím otočte střelky (červená = sever) tak, aby ukazovaly směr magnetických indukčních čar.</p>
+                <div class="compass-grid">
+                    <div></div>
+                    <div class="compass" onclick="rotate(this)" data-angle="0"><div class="needle" style="transform: rotate(0deg)"></div></div>
+                    <div></div>
+                    
+                    <div class="compass" onclick="rotate(this)" data-angle="0"><div class="needle" style="transform: rotate(0deg)"></div></div>
+                    <div class="wire-center" title="Proud k nám">&bigodot; I</div>
+                    <div class="compass" onclick="rotate(this)" data-angle="0"><div class="needle" style="transform: rotate(0deg)"></div></div>
+                    
+                    <div></div>
+                    <div class="compass" onclick="rotate(this)" data-angle="0"><div class="needle" style="transform: rotate(0deg)"></div></div>
+                    <div></div>
+                </div>
+                <button class="btn" onclick="checkCompass()">Opravit modul</button>
+            </div>
+
+            <div id="seg8" class="module">
+                <h2>Modul 8: Zero Point Crisis</h2>
+                <p>V tunelu vedou dva svislé paralelní vodiče ve vzdálenosti \( 15 \text{ cm} \) od sebe. Levým vodičem protéká proud <strong>\( I_1 = 5 \text{ A} \) směrem vzhůru</strong> (k nám), pravým proud <strong>\( I_2 = 2 \text{ A} \) směrem dolů</strong> (od nás).</p>
+                <p>Analyzujte přiložený průřez. Ve kterém z vyznačených bodů (A, B, C) na ose x se pole obou vodičů přesně vyruší a výsledná magnetická indukce bude nulová?</p>
+                
+                <div style="background: #111; border: 1px solid #00ffff; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center;">
+                    <svg viewBox="0 0 500 200" style="width: 100%; height: auto;">
+                        <line x1="20" y1="100" x2="480" y2="100" stroke="#555" stroke-width="2"/>
+                        
+                        <circle cx="150" cy="100" r="15" fill="#39ff14"/>
+                        <circle cx="150" cy="100" r="3" fill="#000"/>
+                        <text x="135" y="75" fill="#39ff14" font-family="Arial" font-size="16">I₁ = 5 A</text>
+                        
+                        <circle cx="300" cy="100" r="15" fill="#ff00ff"/>
+                        <path d="M 293 93 L 307 107 M 307 93 L 293 107" stroke="#000" stroke-width="2"/>
+                        <text x="285" y="75" fill="#ff00ff" font-family="Arial" font-size="16">I₂ = 2 A</text>
+                        
+                        <circle cx="80" cy="100" r="8" fill="#fff" stroke="#000" stroke-width="2"/>
+                        <text x="73" y="130" fill="#fff" font-weight="bold" font-family="Arial">A</text>
+                        
+                        <circle cx="225" cy="100" r="8" fill="#fff" stroke="#000" stroke-width="2"/>
+                        <text x="219" y="130" fill="#fff" font-weight="bold" font-family="Arial">B</text>
+                        
+                        <circle cx="400" cy="100" r="8" fill="#fff" stroke="#000" stroke-width="2"/>
+                        <text x="393" y="130" fill="#fff" font-weight="bold" font-family="Arial">C</text>
+                        
+                        <text x="175" y="170" fill="#aaa" font-family="Arial" font-size="14">Vzdálenost vodičů d = 15 cm</text>
+                        <path d="M 150 150 L 300 150" stroke="#aaa" stroke-width="1" marker-start="url(#arrow-black)" marker-end="url(#arrow-black)"/>
+                    </svg>
+                </div>
+
+                <div class="question-block" style="display: flex; gap: 30px; justify-content: center;">
+                    <div><input type="radio" name="q8" value="A" id="q8a"> <label for="q8a">Bod A</label></div>
+                    <div><input type="radio" name="q8" value="B" id="q8b"> <label for="q8b">Bod B</label></div>
+                    <div><input type="radio" name="q8" value="C" id="q8c"> <label for="q8c">Bod C</label></div>
+                </div>
+                <button class="btn" onclick="checkRadio(8, 'q8', 'C', 'Nulový bod lokalizován!')">Opravit modul</button>
+            </div>
+
+            <div id="seg9" class="module">
+                <h2>Modul 9: Parametry pole</h2>
+                <p>Jakou velikost musí mít magnetická indukce homogenního magnetického pole působícího na paprsek elektronů, které letí rychlostí \( v = 1{,}3 \cdot 10^6 \text{ m/s} \), aby se pohybovaly po kružnici o poloměru \( r = 0{,}35 \text{ m} \)?</p>
+                <p><i>Konstanty:</i> Hmotnost elektronu \( m_e = 9{,}1 \cdot 10^{-31} \text{ kg} \), elementární náboj \( e = 1{,}6 \cdot 10^{-19} \text{ C} \).</p>
+                <div class="question-block">
+                    <input type="radio" name="q9" value="A" id="q9a"> <label for="q9a">\( B = 2{,}1 \cdot 10^{-5} \text{ T} \)</label><br>
+                    <input type="radio" name="q9" value="B" id="q9b"> <label for="q9b">\( B = 4{,}5 \cdot 10^{-4} \text{ T} \)</label><br>
+                    <input type="radio" name="q9" value="C" id="q9c"> <label for="q9c">\( B = 1{,}2 \cdot 10^{-5} \text{ T} \)</label><br>
+                    <input type="radio" name="q9" value="D" id="q9d"> <label for="q9d">\( B = 3{,}8 \cdot 10^{-6} \text{ T} \)</label>
+                </div>
+                <button class="btn" onclick="checkRadio(9, 'q9', 'A', 'Hodnota indukce potvrzena!')">Opravit modul</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Startovací logika a video overlay
+        const startBtn = document.getElementById('start-btn');
+        const skipBtn = document.getElementById('skip-btn');
+        const introVideo = document.getElementById('intro-video');
+        const introOverlay = document.getElementById('overlay-intro');
+        const gameLayout = document.getElementById('game-layout');
+        const mainTitle = document.getElementById('main-title');
+
+        // Funkce pro přechod do hry
+        function startGame() {
+            introOverlay.style.display = 'none';
+            gameLayout.style.display = 'flex';
+            mainTitle.style.display = 'block';
+            
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        startBtn.onclick = () => {
+            startBtn.style.display = 'none';
+            introVideo.style.display = 'block';
+            skipBtn.style.display = 'block';
+
+            // Zajištění přehrávání od začátku
+            introVideo.currentTime = 0;
+            
+            let playPromise = introVideo.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log("Prohlížeč zablokoval automatické přehrání, použijte nativní controls nebo video přeskočte:", error);
+                });
+            }
+        };
+
+        // Ruční přeskočení videa
+        skipBtn.onclick = () => {
+            introVideo.pause();
+            startGame();
+        };
+
+        // Konec videa automaticky spustí hru
+        introVideo.onended = startGame;
+
+        // Logika hry
+        let solved = [false, false, false, false, false, false, false, false, false];
+        let errors = 0;
+        let gameOver = false;
+
+        function triggerDanger() {
+            if(gameOver) return;
+            let el = document.getElementById('overlay-danger');
+            el.style.display = 'flex';
+            
+            errors++;
+            if(errors <= 5) document.getElementById('led' + errors).classList.add('on');
+            
+            setTimeout(() => { 
+                el.style.display = 'none'; 
+                if(errors >= 5) {
+                    gameOver = true;
+                    document.getElementById('overlay-gameover').style.display = 'flex';
+                }
+            }, 1500);
+        }
+
+        function triggerSuccess(msg, callback) {
+            if(gameOver) return;
+            let el = document.getElementById('overlay-success');
+            document.getElementById('success-text').innerText = msg;
+            el.style.display = 'flex';
+            setTimeout(() => { 
+                el.style.display = 'none'; 
+                callback();
+            }, 1500);
+        }
+
+        function openModule(num) {
+            if(solved[num-1] || gameOver) return;
+            document.getElementById('welcome-msg').style.display = 'none';
+            document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+            document.getElementById('seg' + num).classList.add('active');
+        }
+
+        function checkConnections() {
+            for(let i=1; i<=9; i++) {
+                let next = (i === 9) ? 1 : i + 1;
+                if(solved[i-1] && solved[next-1]) {
+                    let line = document.getElementById(`conn${i}-${next}`);
+                    if(line) line.classList.add('neon');
+                }
+            }
+        }
+
+        function markSolved(num, msg = "Modul úspěšně opraven.") {
+            triggerSuccess(msg, () => {
+                solved[num-1] = true;
+                let node = document.getElementById('node' + num);
+                node.classList.remove('broken');
+                node.classList.add('fixed');
+                
+                document.getElementById('seg' + num).classList.remove('active');
+                document.getElementById('welcome-msg').style.display = 'block';
+                document.getElementById('welcome-msg').innerHTML = "<h2>MODUL OPRAVEN</h2><p>Pokračujte výběrem dalšího poškozeného uzlu na mapě.</p>";
+                
+                checkConnections();
+
+                if(solved.every(val => val === true)) {
+                    document.getElementById('lhc-ring').classList.add('spin');
+                    setTimeout(() => {
+                        triggerSuccess("VŠECHNY SYSTÉMY LHC JSOU ONLINE!", () => {
+                            document.body.innerHTML = '<h1 style="text-align:center; margin-top: 15%; font-size: 3em; color: #39ff14;">🚀 OPERACE GRAVITINO DOKONČENA 🚀<br><br>Urychlovač rotuje na 100% výkon.</h1>';
+                        });
+                    }, 1000);
+                }
+            });
+        }
+
+        function checkRadio(num, name, correct, msg) {
+            let sel = document.querySelector('input[name="'+name+'"]:checked');
+            if(sel && sel.value === correct) markSolved(num, msg);
+            else triggerDanger();
+        }
+
+        // Drag & Drop
+        let draggedElement = null;
+        document.querySelectorAll('.draggable').forEach(elem => {
+            elem.addEventListener('dragstart', function() { draggedElement = this; setTimeout(() => this.style.opacity = '0.5', 0); });
+            elem.addEventListener('dragend', function() { setTimeout(() => this.style.opacity = '1', 0); draggedElement = null; });
+        });
+        document.querySelectorAll('.dropzone').forEach(zone => {
+            zone.addEventListener('dragover', e => e.preventDefault());
+            zone.addEventListener('drop', function() {
+                if(draggedElement && this.children.length === 0) this.appendChild(draggedElement);
+            });
+        });
+        function returnWord(zone) {
+            if(zone.children.length > 0) document.getElementById('word-bank').appendChild(zone.children[0]);
+        }
+        function checkDND() {
+            let correct = true;
+            document.querySelectorAll('.dropzone').forEach(zone => {
+                if(zone.children.length === 0 || zone.children[0].id !== zone.getAttribute('data-answer')) correct = false;
+            });
+            if(correct) markSolved(2, "Log byl úspěšně dekódován.");
+            else triggerDanger();
+        }
+
+        function checkSpektro() {
+            let a1 = document.querySelector('input[name="s1"]:checked');
+            let a2 = document.querySelector('input[name="s2"]:checked');
+            let a3 = document.querySelector('input[name="s3"]:checked');
+            if(a1?.value==="up" && a2?.value==="up" && a3?.value==="down") markSolved(5, "Spektrograf kalibrován.");
+            else triggerDanger();
+        }
+
+        function checkMaze() {
+            let m1 = document.getElementById('maze1').value;
+            let m2 = document.getElementById('maze2').value;
+            let m3 = document.getElementById('maze3').value;
+            let m4 = document.getElementById('maze4').value;
+            if(m1 === "out" && m2 === "out" && m3 === "in" && m4 === "in") markSolved(6, "Svazek bezpečně prošel bludištěm.");
+            else triggerDanger();
+        }
+
+        function rotate(el) {
+            let angle = parseInt(el.getAttribute('data-angle')) + 90;
+            if(angle >= 360) angle = 0;
+            el.setAttribute('data-angle', angle);
+            el.children[0].style.transform = `rotate(${angle}deg)`;
+        }
+        function checkCompass() {
+            let c = document.querySelectorAll('.compass');
+            if(c[0].getAttribute('data-angle') == "270" && 
+               c[1].getAttribute('data-angle') == "180" && 
+               c[2].getAttribute('data-angle') == "0" && 
+               c[3].getAttribute('data-angle') == "90") {
+                markSolved(7, "Magnetický zámek odemčen.");
+            } else {
+                triggerDanger();
+            }
+        }
+    </script>
+</body>
+</html>
